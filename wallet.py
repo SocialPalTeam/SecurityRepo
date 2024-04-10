@@ -1,4 +1,3 @@
-
 import hashlib
 import json
 import logging
@@ -40,7 +39,9 @@ def create_wallet(
             r_user = None
             created = False
 
-            r_user, created = User.objects.create_social_user({"username": uname, "uid": uid, "network": source})
+            r_user, created = User.objects.create_social_user(
+                {"username": uname, "uid": uid, "network": source}
+            )
 
             if created is False:
                 if r_user is not None:
@@ -64,7 +65,7 @@ def create_wallet(
             uw = UserWallets()
             uw.chain = r_chain
             uw.primary_address = res["addr"]
-            uw.passphrase = res["pk"]
+            uw.passphrase = None  # This is no longer used, this was pre vault, all wallet phrases are set to null on the DB, to be deleted prior to the reset wallet dev
             uw.active = 1
             uw.user = r_user
             uw.save()
@@ -95,7 +96,11 @@ def create_wallet(
             rid = UserRequests(
                 social_network=source,
                 social_interaction=source_interaction,
-                request_origin="api" if source_interaction is None else source_interaction.interaction_type,
+                request_origin=(
+                    "api"
+                    if source_interaction is None
+                    else source_interaction.interaction_type
+                ),
                 request_type="register",
                 request_data="!register",
                 user=r_user,
@@ -106,7 +111,9 @@ def create_wallet(
             )
             rid.save()
             res["msg"] = (
-                common.get_messageTemplate(msg="USER_REGISTRATION", lang=r_user.language)["message"]
+                common.get_messageTemplate(
+                    msg="USER_REGISTRATION", lang=r_user.language
+                )["message"]
                 .replace("#ADDR", res["addr"])
                 .replace("#UNAME", source.name.capitalize())
             )
@@ -118,14 +125,17 @@ def create_wallet(
                 "fullres": res,
                 "user": r_user,
             }
-            
+
+
 def get_vault_user_data(user: User):
     try:
         uw = UserWallets.objects.get(user=user, active=1)
         secret = vault.get_secret("socialpal_seeds", uw.primary_address, "data")
         k1 = secret["k"][0:8]
         k2 = hashlib.sha256(str(user.id).encode()).hexdigest()[0:8]
-        decypher = AES.new((k1 + k2).encode(), AES.MODE_EAX, nonce=bytes.fromhex(secret["nonce"]))
+        decypher = AES.new(
+            (k1 + k2).encode(), AES.MODE_EAX, nonce=bytes.fromhex(secret["nonce"])
+        )
         pdata = json.loads(decypher.decrypt(bytes.fromhex(secret["data"])))
         return pdata
     except Exception:
